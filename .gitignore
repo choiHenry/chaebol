@@ -1,0 +1,7 @@
+# Ignore Mac system files
+.DS_store
+
+# Ignore data, pycache, chromedriver folder
+data/
+__pycache__/
+101/
