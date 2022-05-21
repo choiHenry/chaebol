@@ -1,6 +1,9 @@
 # Ignore Mac system files
 .DS_store
 
+# Ignore vscode system folder
+.vscode/
+
 # Ignore data, pycache, chromedriver folder
 data/
 __pycache__/
