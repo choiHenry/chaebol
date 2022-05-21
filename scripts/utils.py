@@ -87,41 +87,7 @@ def cleanCmpnyNm(df):
     df = df.replace('\.\d+', '', regex=True)
     df = df.replace('\\xa0', '', regex=True)
     
-
     return df
-
-    # df = df.replace("\('\d+.\d+.\d+계열제외\)", '', regex=True)
-    # df = df.replace("\('18.10.10계열제외\)", '', regex=True)
-    # df = df.replace("\(\d+.\d+.\d+흡수합병해산\)", '', regex=True)
-    # df = df.replace("\(2019.04.30흡수합병해산\)", '', regex=True)
-    # df = df.replace("\(\d+.\d+.\d+해산\)", '', regex=True)
-    # df = df.replace("\(2019.04.30해산\)", '', regex=True)
-    # df = df.replace("\(2020.03.31해산\)", '', regex=True)
-    # df = df.replace("\(2020.10.30해산\)", '', regex=True)
-    # df = df.replace("\(\d+.\d+.\d+계열제외\)", '', regex=True)
-    # df = df.replace("\(2018.8.27계열제외\)", '', regex=True)
-    # df = df.replace("\(2018.11.23계열제외\)", '', regex=True)
-    # df = df.replace("\(2018.12.13계열제외\)", '', regex=True)
-    # df = df.replace("\(2019.2.14계열제외\)", '', regex=True)
-    # df = df.replace("\(2018.6.11계열제외\)", '', regex=True)
-
-    # df = df.replace('\(구,\s*[\u3131-\u314e|\u314f-\u3163|\uac00-\ud7a3]*\)', '', regex=True)
-    # df = df.replace('\(구,퍼니파우\)', '', regex=True)
-    # df = df.replace('\(구,넷마블블루\)', '', regex=True)
-    # df = df.replace('\(구,천백십일\)', '', regex=True)
-    # df = df.replace('\(舊\),한화첨단소재', '', regex=True)
-    # df = df.replace('\(舊[\uac00-\ud7a3]*\)', '', regex=True)
-    # df = df.replace('\(*舊\s*[\),]*[\u3131-\u314e|\u314f-\u3163|\uac00-\ud7a3]*\)*', '', regex=True)
-    # df = df.replace('\(舊 한화테크윈\)', '', regex=True)
-    # df = df.replace('\(舊 양주환경\)', '', regex=True)
-    # df = df.replace('舊한화지상방산', '', regex=True)
-    # df = df.replace('\（舊\s*[\u3131-\u314e|\u314f-\u3163|\uac00-\ud7a3]*\）', '', regex=True)
-    # df = df.replace('\(舊\s*[\u3131-\u314e|\u314f-\u3163|\uac00-\ud7a3]*\）', '', regex=True)
-    # df = df.replace('\(구[\uac00-\ud7a3]*\)', '', regex=True)
-    # df = df.replace('舊', '', regex=True)
-    # df = df.replace('\(주\d+\)', '', regex=True)
-    # df = df.replace('\*주\d+', '', regex=True)
-
 
 def convColNm(colNm):
     newColNm = []
@@ -268,13 +234,9 @@ def cleanSalesData(df):
     df.replace('_', np.nan, regex=True, inplace=True)
     df.replace(',', np.nan, regex=True, inplace=True)
     df.replace('"*해당사항\s*없음"*', np.nan, regex=True, inplace=True)
-    # df.replace('"해당사항없음', np.nan, inplace=True)
-    # df.replace('"해당사항없음"', np.nan, inplace=True)
-    # df.replace('해당사항없음', np.nan, inplace=True)
     df.replace("\(주\d\)", np.nan, regex=True, inplace=True)
     df.replace("\((\d+)\)", '-\\1', regex=True, inplace=True)
     df.replace('', np.nan, inplace=True) # regex keyword is set to False
-    # df.replace("\(주2\)", np.nan, regex=True, inplace=True)
     df = df.astype('float')
 
     df = df.reset_index()
