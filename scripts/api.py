@@ -1,6 +1,3 @@
-import sys
-sys.path.append('../scripts')
-
 import requests
 import zipfile
 import xml.etree.ElementTree as ET
@@ -13,13 +10,11 @@ from selenium import webdriver
 import chromedriver_autoinstaller
 import numpy as np
 import pandas as pd
-
+from time import sleep
 from os import path
 from selenium import webdriver
 from selenium.webdriver.common.action_chains import ActionChains
 from selenium.webdriver.common.by import By
-from selenium.webdriver.support.ui import WebDriverWait
-from selenium.webdriver.support import expected_conditions as EC
 
 chromedriver_autoinstaller.install(path="../utils/")
 
@@ -348,6 +343,83 @@ class Api:
             print(dfTransLong.tail())
             print("="* 15 + grp + "=" * 15)
 
+    def scrapeKiscode(self, year, username, password):
+
+        df = pd.read_excel(f'../data/cmpnySumry/cmpnySumry{year}Eng.xlsx')
+        if 'rcmgCode' in df.columns:
+            raise ValueError(f'Rcmg code already exists in cmpnySumry{year}Eng.xlsx')
+
+        df_1 = pd.read_excel(f'../data/cmpnySumry/cmpnySumry{year+1}Eng.xlsx')
+        if 'rcmgCode' in df_1.columns:
+            df = df.merge(df_1[['jurirno', 'rcmgCode']], on='jurirno', how='left')
+            dfTrgt = df[df['rcmgCode'].isna()]
+            dfTrgt.drop(columns=['rcmgCode'], inplace=True)
+        else:
+            dfTrgt = df
+
+        print(f"Rcmg code missing for {len(dfTrgt)} companies")
+
+        driver = webdriver.Chrome()
+        driver.implicitly_wait(3)
+
+        grsrch_url = 'https://www.kisline.com/cm/CM0100M00GE00.nice'
+        driver.get(grsrch_url)
+        driver.find_element(By.CLASS_NAME'btn_close_layer').click()
+        driver.find_element(By.ID, 'lgnuid').send_keys(username)
+        driver.find_element(By.ID, 'tmp_lgnupassword').click()
+        driver.find_element(By.ID, 'lgnupassword').send_keys(password)
+        driver.find_element(By.CLASS_NAME'btn_log_in').click()
+        driver.implicitly_wait(3)
+        sleep(1)
+
+        dKiscode = dict()
+        inputElem = driver.find_element_by_id('q')
+
+        for i, jurirno in enumerate(dfTrgt['jurirno']):
+
+            inputElem.send_keys(jurirno)
+            driver.find_element_by_id('searchView').click()
+            driver.implicitly_wait(3)
+            try:
+                target_row = driver.find_element_by_xpath('//*[@id="eprTable"]/tbody/tr/td[2]')
+                kiscode = target_row.get_attribute('data-kiscode')
+                dKiscode[i] = [jurirno, kiscode]
+                print(f"Found kiscode for {jurirno}: {kiscode}")
+            except:
+                dKiscode[i] = [jurirno, np.nan]
+                print(f"No company found for {jurirno}. Continuing...")
+            sleep(3)
+            inputElem = driver.find_element_by_id('q')
+            inputElem.clear()
+
+        sleep(3)
+        driver.find_element_by_link_text('로그아웃').click()
+        sleep(1)
+        driver.quit()
+
+        dfKiscode = pd.DataFrame.from_dict(dKiscode, orient='index')
+        dfKiscode.columns = ['jurirno', 'kiscode']
+        
+        dfCharToInt = pd.read_excel('../data/utils/char-to-int.xlsx')
+        dfKiscode['rcmgCode'] = dfKiscode['kiscode']
+        for i in range(len(dfCharToInt)):
+            dfKiscode['rcmgCode'] = dfKiscode['rcmgCode'].replace(dfCharToInt.iloc[i, 0], str(dfCharToInt.iloc[i, 1]), regex=True)
+        dfLhs = df[~df['rcmgCode'].isna()]
+
+        dfRhs = dfTrgt.merge(dfKiscode[['jurirno', 'rcmgCode']], on='jurirno', how='left')
+
+        dfMrgd = pd.concat([dfLhs, dfRhs], axis=0)
+        dfMrgd.reset_index(inplace=True)
+        dfMrgd.drop(columns=['index'], inplace=True)
+
+        print(dfMrgd[dfMrgd['rcmgCode'].isna()])
+
+        dfMrgd.to_excel(f'../data/cmpnySumry/cmpnySumry{year}Eng.xlsx', index=False)
+
+        return dfMrgd
+
+
 if __name__ == '__main__':
     apiKey = "7946dcde119af7656afc01157071c0ab9488b9ad"
     api = Api(apiKey)
+    api.scrapeKiscode(2018, 'wonbok', 'gkrtkrhk5034!')
