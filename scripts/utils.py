@@ -64,7 +64,7 @@ def cleanCmpnyNm(df):
     df = df.replace('유한회사', '', regex=True)
     df = df.replace('㈜', '', regex=True)
     # (주), (주1) 등 제거
-    df = df.replace('\(주\d*\)', '', regex=True)
+    df = df.replace('\(*\**주\d*\)', '', regex=True)
     df = df.replace('\(유\)', '', regex=True)
     df = df.replace('\(자\)', '', regex=True)
     df = df.replace('주식회사', '', regex=True)
@@ -86,6 +86,10 @@ def cleanCmpnyNm(df):
     df = df.replace('\.\d+', '', regex=True)
     df = df.replace('\.\d+', '', regex=True)
     df = df.replace('\\xa0', '', regex=True)
+    df = df.replace('\.$', '', regex=True)
+    df = df.replace('주\d+', '', regex=True)
+    df = df.replace('\(\d+\)', '', regex=True)
+
     
     return df
 
@@ -241,4 +245,33 @@ def cleanSalesData(df):
 
     df = df.reset_index()
 
+    return df
+
+def convertCmpnyNm(df, grp):
+
+    if grp == '엘에스':
+        df = df.replace('LS', '엘에스', regex=True)
+        df = df.replace('E1', '이원', regex=True)
+        df = df.replace('KJ', '케이제이', regex=True)
+        df = df.replace('JS', '제이에스', regex=True)
+        
+    elif grp == '미래에셋':
+        df = df.replace('미래에셋파트너스제9호사모투자', '미래에셋파트너스제구호사모투자', regex=True)
+        df = df.replace('미래에셋파트너스9호', '미래에셋파트너스제구호사모투자', regex=True)
+    
+    elif grp == '태영':
+        df = df.replace('SBS', '에스비에스', regex=True)
+        df = df.replace('KCP', '케이씨피', regex=True)
+        df = df.replace('PFV', '피에프브이', regex=True)
+        
+    elif grp == 'DB':
+        df = df.replace('Inc\.', '아이엔씨', regex=True)
+        df = df.replace('DB', '디비', regex=True)
+        
+    elif grp == 'KG':
+        df = df.replace('KG', '케이지', regex=True)
+
+    elif grp == '하림':
+        df = df.replace('FS', '에프에스', regex=True)
+    
     return df

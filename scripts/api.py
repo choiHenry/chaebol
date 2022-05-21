@@ -5,7 +5,7 @@ import os
 import pickle
 import re
 from utils import download, cleanCmpnyNm, cleanColNm, cleanSalesData, catOwn, catOwn2, \
-getGrpCmpnyDict, cleanseTransWide, makeHeader
+getGrpCmpnyDict, cleanseTransWide, makeHeader, convertCmpnyNm
 from selenium import webdriver
 import chromedriver_autoinstaller
 import numpy as np
@@ -192,7 +192,7 @@ class Api:
         dGrpCmpny = getGrpCmpnyDict(year)
         
         for grp, cmpny in dGrpCmpny.items():
-            dfShares = api.getSharesTable(cmpny, year)
+            dfShares = self.getSharesTable(cmpny, year)
             # save the data in the after_cleansing folder
             if not os.path.exists(f'../data/ownership-status/raw/{year}'):
                 os.makedirs(f'../data/ownership-status/raw/{year}')
@@ -310,10 +310,14 @@ class Api:
         
         dfLong = dfLong[~dfLong['매출회사'].isin(['소계', '합계', '계', '거래업체수', '해외계열사업체수', '계열회사합계매입액', \
                                              '비금융소계', '금융회사', '기타', '해외계열사수', '해외계열사계매출액한화', \
-                                             '기타(루셈등)', '계열회사합계(매입액)', '⑩소계'])]
+                                             '기타(루셈등)', '계열회사합계(매입액)', '⑩소계', '해외계열사계(매출액)한화', \
+                                             '거래해외계열사수', '거래계열회사수', '해외거래처수', '거래업체수엘에스는주석참조', \
+                                             '업체수'])]
         dfLong = dfLong[~dfLong['매입회사'].isin(['소계', '합계', '계', '거래업체수', '해외계열사업체수', '해외계열회사업체수', \
                                              '비금융소계', '금융회사', '기타', '해외계열사수', '해외계열사계매출액한화', \
-                                              '기타(루셈등)', '계열회사합계(매입액)', '⑩소계'])]
+                                              '기타(루셈등)', '계열회사합계(매입액)', '⑩소계', '해외계열사계(매출액)한화', \
+                                              '거래해외계열사수', '거래계열회사수', '해외거래처수', '거래업체수엘에스는주석참조', \
+                                              '업체수'])]
         
         return dfLong
     
@@ -331,7 +335,7 @@ class Api:
             if cont:
                 continue
                 
-            dfTransLong = api.getTransTable(cmpny, year)
+            dfTransLong = self.getTransTable(cmpny, year)
             # save the data in the after_cleansing folder
             if not os.path.exists(f'../data/transactions/{year}'):
                 os.makedirs(f'../data/transactions/{year}')
@@ -364,11 +368,11 @@ class Api:
 
         grsrch_url = 'https://www.kisline.com/cm/CM0100M00GE00.nice'
         driver.get(grsrch_url)
-        driver.find_element(By.CLASS_NAME'btn_close_layer').click()
+        driver.find_element(By.CLASS_NAME, 'btn_close_layer').click()
         driver.find_element(By.ID, 'lgnuid').send_keys(username)
         driver.find_element(By.ID, 'tmp_lgnupassword').click()
         driver.find_element(By.ID, 'lgnupassword').send_keys(password)
-        driver.find_element(By.CLASS_NAME'btn_log_in').click()
+        driver.find_element(By.CLASS_NAME, 'btn_log_in').click()
         driver.implicitly_wait(3)
         sleep(1)
 
@@ -418,8 +422,68 @@ class Api:
 
         return dfMrgd
 
+    def mergeTransId(self, year):
+
+        dfCmpnySumry = pd.read_excel(f'../data/cmpnySumry/cmpnySumry{year}Kor.xlsx', thousands=',')
+        dfCmpnySumry['매출액Val'] = dfCmpnySumry['매출액']
+        dfCmpnySumry['매출회사id'] = dfCmpnySumry['rcmgCode']
+        dfCmpnySumry['매입회사id'] = dfCmpnySumry['rcmgCode']
+        dfCmpnySumry['매출사공개여부'] = ~dfCmpnySumry['기업공개일'].isna()
+        dfCmpnySumry['매출사상/비'] = dfCmpnySumry['매출사공개여부'].apply(lambda b: '상장' if b else '비상장')
+        dfCmpnySumry['매입사상/비'] = dfCmpnySumry['매출사상/비']
+        dfCmpnySumry['매출사금융여부'] = dfCmpnySumry['업종코드'].isin(['K64', 'K65', 'K66'])
+        dfCmpnySumry['매출사금융/비금융'] = dfCmpnySumry['매출사금융여부'].apply(lambda b: '금융' if b else '비금융')
+        dfCmpnySumry['매입사금융/비금융'] = dfCmpnySumry['매출사금융/비금융']
+        dfCmpnySumry['매출회사'] = cleanCmpnyNm(dfCmpnySumry['소속회사명'])
+        dfCmpnySumry['매입회사'] = cleanCmpnyNm(dfCmpnySumry['소속회사명'])
+
+        dfAppnGroupSttus = pd.read_excel(f"../data/grpSumry/appnGroupSttus/appnGroupSttus{year}.xlsx")
+        dfAppnGroupSttus = dfAppnGroupSttus[dfAppnGroupSttus['smerNm'].str.len() <= 3]
+        dfAppnGroupSttus = dfAppnGroupSttus.reset_index().drop(columns=['index'])
+        dfAppnGroupSttus['repreCmpny'] = cleanCmpnyNm(dfAppnGroupSttus['repreCmpny'])
+
+        lookUpListSell = []
+        lookUpListBuy = []
+        lTransId = []
+
+        for grp in dfAppnGroupSttus['unityGrupNm']:
+            print("="*15, grp, "="*15)
+            dfTrans = pd.read_excel(f"../data/transactions/{year}/{grp}.xlsx")
+            dfTrans['매출액총계'] = dfTrans['국내매출액'] + dfTrans['해외매출액']
+            dfTrans['year2'] = year
+            dfTrans['year'] = year - 1
+            dfTrans['grpname2'] = grp
+            
+            
+            if grp in ['엘에스', '미래에셋', '태영', 'DB', 'KG']:
+                dfTrans.loc[:, ['매출회사', '매입회사']] = convertCmpnyNm(dfTrans[['매출회사', '매입회사']], grp)
+            
+            dfTransId = dfTrans.merge(dfCmpnySumry[['매출회사', '매출회사id', '매출사상/비', '매출사금융/비금융', '매출액Val']], on='매출회사', how='left')
+            dfTransId = dfTransId.merge(dfCmpnySumry[['매입회사', '매입회사id', '매입사상/비', '매입사금융/비금융']], on='매입회사', how='left')
+            print(list(dfTransId[dfTransId['매출회사id'].isna()]['매출회사'].unique()))
+            lookUpListSell.extend(list(dfTransId[dfTransId['매출회사id'].isna()]['매출회사'].unique()))
+            print(list(dfTransId[dfTransId['매입회사id'].isna()]['매입회사'].unique()))
+            lookUpListBuy.extend(list(dfTransId[dfTransId['매입회사id'].isna()]['매출회사'].unique()))
+            print(dfTransId.head())
+            
+            if not os.path.exists(f'../data/transactions-mrg/{year}'):
+                os.makedirs(f'../data/transactions-mrg/{year}')
+            
+            dfTransId.to_excel(f"../data/transactions-mrg/{year}/{grp}.xlsx", index=False)
+
+            lTransId.append(dfTransId)
+            
+            print("="*15, grp, "="*15)
+        
+        dfTransIdMrgd = pd.concat(lTransId, axis=0)
+        dfTransIdMrgd.to_excel(f"../data/transactions-mrg/{year}/transactions{year}.xlsx", index=False)
+
+        return dfTransIdMrgd, lookUpListSell, lookUpListBuy
+
 
 if __name__ == '__main__':
     apiKey = "7946dcde119af7656afc01157071c0ab9488b9ad"
     api = Api(apiKey)
-    api.scrapeKiscode(2018, 'wonbok', 'gkrtkrhk5034!')
+    api.getTransTableAll(2019)
+    api.getTransTableAll(2020)
+    api.getTransTableAll(2021)
