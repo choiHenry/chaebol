@@ -6,11 +6,20 @@ import zipfile
 import xml.etree.ElementTree as ET
 import os
 import pickle
-from utils import download, clean, catOwn, catOwn2
+import re
+from utils import download, cleanCmpnyNm, cleanColNm, cleanSalesData, catOwn, catOwn2, \
+getGrpCmpnyDict, cleanseTransWide, makeHeader
 from selenium import webdriver
 import chromedriver_autoinstaller
 import numpy as np
 import pandas as pd
+
+from os import path
+from selenium import webdriver
+from selenium.webdriver.common.action_chains import ActionChains
+from selenium.webdriver.common.by import By
+from selenium.webdriver.support.ui import WebDriverWait
+from selenium.webdriver.support import expected_conditions as EC
 
 chromedriver_autoinstaller.install(path="../utils/")
 
@@ -83,6 +92,9 @@ class Api:
         pgCnt = "50"
         bgnDe = str(year) + '0501'
         endDe = str(year+1) + '0430'
+        if (corpNm in ['아모레퍼시픽그룹'] and year == 2020) or (corpNm in ['아이엠엠인베스트먼트'] and year == 2020):
+            bgnDe = str(year) + '0501'
+            endDe = str(year+1) + '0830'
 
         # find the firm that submitted reports to FTC whose name is <firmname>
         for corpCode in codeList:
@@ -103,15 +115,21 @@ class Api:
         receptNums = [report['rcept_no'] for report in content['list'] if ('대규모기업집단현황공시[연1회공시및1/4분기용(대표회사)]' \
                         in report['report_nm'])]
         
-        if (corpNm in ['아모레퍼시픽그룹', '아이엠엠인베스트먼트'] and year == 2021):
+        if (corpNm in ['아모레퍼시픽그룹', '아이엠엠인베스트먼트'] and year == 2021) \
+        or (corpNm in ['교보생명보험'] and year == 2019) \
+        or (corpNm in ['한국앤컴퍼니'] and year == 2020) \
+        or (corpNm in ['아모레퍼시픽그룹'] and year == 2019) \
+        :
             receptNums = [receptNums[0]] # select the last report received
+        elif (corpNm in ['아모레퍼시픽그룹', '아이엠엠인베스트먼트'] and year == 2020):
+            receptNums = [receptNums[1]] # select the first report received
         
         assert len(receptNums) >= 1, f'{corpNm}: no 대규모기업집단현황공시[연1회공시및1/4분기용(대표회사)] found for {bgnDe} ~ {endDe}'
         assert len(receptNums) <= 1, f'{corpNm}: Too many 대규모기업집단현황공시[연1회공시및1/4분기용(대표회사)] report found'
 
         return receptNums[0]
 
-    def getSharesURL(self, corpNm, year):
+    def getSharesUrl(self, corpNm, year):
 
         rceptNum = self.findRceptNum(corpNm, year)
         driver = webdriver.Chrome()
@@ -133,7 +151,7 @@ class Api:
     def getSharesTable(self, corpNm, year):
         
         # get shares url
-        url = self.getSharesURL(corpNm, year)
+        url = self.getSharesUrl(corpNm, year)
         
         # parse html tables which includes string data '동일인'(the same person in Korean) with thousands delimiter ',' 
         tables = pd.read_html(url, match='동일인', thousands=',')
@@ -168,41 +186,22 @@ class Api:
         df[['동일인과의관계', '동일인과의관계2', '동일인과의관계3']] = df[['동일인과의관계', '동일인과의관계2', '동일인과의관계3']].replace(' ', '', regex=True)
         df[['동일인과의관계', '동일인과의관계2', '동일인과의관계3']] = df[['동일인과의관계', '동일인과의관계2', '동일인과의관계3']].replace('⑧', '', regex=True)
         df[['동일인과의관계', '동일인과의관계2', '동일인과의관계3']] = df[['동일인과의관계', '동일인과의관계2', '동일인과의관계3']].replace('⑨', '', regex=True)
-
-        # save the data in the after_cleansing folder
-        if not os.path.exists(f'../data/ownership-status/raw/{year}'):
-            os.makedirs(f'../data/ownership-status/raw/{year}')
-        df.to_excel(f'../data/ownership-status/raw/{year}/{corpNm}.xlsx', index=False)
+        df['합계주식수'].replace('^-$', '', regex=True, inplace=True)
+        df['합계주식수'] = df['합계주식수'].copy().replace('', np.nan,regex=True)
+        df['합계주식수'] = df['합계주식수'].copy().astype(float)
 
         return df
     
     def getSharesTableAll(self, year):
         
-        dfAppnGroupSttus = pd.read_excel(f'../data/grpSumry/appnGroupSttus/appnGroupSttus{year}.xlsx')
-        dfAppnGroupSttus['repreCmpny'].replace('에스케이', 'SK', regex=True, inplace=True)
-        dfAppnGroupSttus['repreCmpny'].replace('엘지', 'LG', regex=True, inplace=True)
-        dfAppnGroupSttus['repreCmpny'].replace('지에스', 'GS', regex=True, inplace=True)
-        dfAppnGroupSttus['repreCmpny'].replace('한진칼', '대한항공', regex=True, inplace=True)
-        dfAppnGroupSttus['repreCmpny'].replace('씨제이', 'CJ', regex=True, inplace=True)
-        dfAppnGroupSttus['repreCmpny'].replace('엘에스', 'LS', regex=True, inplace=True)
-        dfAppnGroupSttus['repreCmpny'].replace('네이버', 'NAVER', regex=True, inplace=True)
-        dfAppnGroupSttus['repreCmpny'].replace('에이치디씨', 'HDC', regex=True, inplace=True)
-        dfAppnGroupSttus['repreCmpny'].replace('디엘', 'DL', regex=True, inplace=True)
-        dfAppnGroupSttus['repreCmpny'].replace('에쓰-오일', 'S-Oil', regex=True, inplace=True)
-        dfAppnGroupSttus['repreCmpny'].replace('오씨아이', 'OCI', regex=True, inplace=True)
-        dfAppnGroupSttus['repreCmpny'].replace('한국투자금융지주', '한국금융지주', regex=True, inplace=True)
-        dfAppnGroupSttus['repreCmpny'].replace('디비아이엔씨', 'DB', regex=True, inplace=True)
-        dfAppnGroupSttus['repreCmpny'].replace('에이케이홀딩스', 'AK홀딩스', regex=True, inplace=True)
-        dfAppnGroupSttus['repreCmpny'].replace('현대해상화재보험', '현대해상', regex=True, inplace=True)
-        clean(dfAppnGroupSttus)
+        dGrpCmpny = getGrpCmpnyDict(year)
         
-        with open(f'../data/utils/gNonChaebol{year}.pkl', 'rb') as f:
-            gNonChaebol = pickle.load(f)
-        
-        for cmpny in dfAppnGroupSttus['repreCmpny']:
-            if cmpny in gNonChaebol['cmpny']:
-                continue
+        for grp, cmpny in dGrpCmpny.items():
             dfShares = api.getSharesTable(cmpny, year)
+            # save the data in the after_cleansing folder
+            if not os.path.exists(f'../data/ownership-status/raw/{year}'):
+                os.makedirs(f'../data/ownership-status/raw/{year}')
+            dfShares.to_excel(f'../data/ownership-status/raw/{year}/{grp}.xlsx', index=False)
             print("="* 15 + cmpny + "=" * 15)
             print(dfShares.head())
             print(dfShares.tail())
@@ -210,6 +209,144 @@ class Api:
             print(dfShares['동일인과의관계2'].unique())
             print(dfShares['동일인과의관계3'].unique())
             print("="* 15 + cmpny + "=" * 15)
+            
+    def getTransUrl(self, firmNm, year):
+        
+        rceptNo = self.findRceptNum(firmNm, year)
+        driver = webdriver.Chrome()
+        driver.maximize_window()
+        driver.implicitly_wait(3)
+        url = "http://dart.fss.or.kr/dsaf001/main.do?rcpNo=" + rceptNo
+
+        driver.get(url)
+        action = ActionChains(driver)
+        action.move_to_element(driver.find_element(By.ID, '30')).perform()
+        btn = driver.find_element(By.PARTIAL_LINK_TEXT, '계열회사간 상품ㆍ용역거래 현황')
+        btn.click()
+
+        # scrape the url of '계열회사간 상품ㆍ용역거래 현황' page
+        transUrl = driver.find_element(By.ID, 'ifrm').get_attribute('src')
+        driver.quit()
+        
+        return transUrl
+    
+    def getTransTableTest(self, firmNm, year):
+        
+        if not os.path.exists(f'./data/transactions{year}'):
+            os.makedirs(f'./data/transactions{year}')
+        
+        rceptNo = self.findRceptNum(firmNm, year)
+        driver = webdriver.Chrome()
+        driver.maximize_window()
+        driver.implicitly_wait(3)
+        url = "http://dart.fss.or.kr/dsaf001/main.do?rcpNo=" + rceptNo
+
+        driver.get(url)
+        action = ActionChains(driver)
+        action.move_to_element(driver.find_element(By.ID, '30')).perform()
+        btn = driver.find_element(By.PARTIAL_LINK_TEXT, '계열회사간 상품ㆍ용역거래 현황')
+        btn.click()
+        transUrl = driver.find_element_by_id('ifrm').get_attribute('src')
+        
+        driver.get(transUrl)
+        
+        
+        # get table elements which are following siblings of p elements that contains text '대표회사'
+
+        tables = driver.find_elements(By.XPATH, "/html/body/table[@border='1']")
+        
+#             dfTables = [pd.read_html(table.get_attribute('outerHTML'), header=[0, 1, 2])[0] for table in tables]
+#         else:    
+        dfTables = [pd.read_html(table.get_attribute('outerHTML'))[0] for table in tables]
+        if ((firmNm == "SK") and (year == 2021)) or ((firmNm == "롯데지주") and (year in [2019, 2020, 2021]))\
+        or ((firmNm == "미래에셋캐피탈") and (year in [2019, 2020, 2021])) \
+        or ((firmNm == "NAVER") and (year in [2020, 2021])) \
+        or ((firmNm == "효성") and (year in [2019, 2020, 2021])):
+            dfTables = [makeHeader(table) for table in dfTables]
+        dfTables = [dfTable for dfTable in dfTables if len(dfTable) > 5]
+        dfWide = pd.concat(dfTables, axis=1)
+        driver.quit()
+        
+        return dfWide
+
+    def getTransTable(self, firmNm, year):
+
+        if not os.path.exists(f'./data/transactions{year}'):
+            os.makedirs(f'./data/transactions{year}')
+        
+        rceptNo = self.findRceptNum(firmNm, year)
+        driver = webdriver.Chrome()
+        driver.maximize_window()
+        driver.implicitly_wait(3)
+        url = "http://dart.fss.or.kr/dsaf001/main.do?rcpNo=" + rceptNo
+
+        driver.get(url)
+        action = ActionChains(driver)
+        action.move_to_element(driver.find_element(By.ID, '30')).perform()
+        btn = driver.find_element(By.PARTIAL_LINK_TEXT, '계열회사간 상품ㆍ용역거래 현황')
+        btn.click()
+        transUrl = driver.find_element_by_id('ifrm').get_attribute('src')
+        
+        driver.get(transUrl)
+        
+        
+        # get table elements which are following siblings of p elements that contains text '대표회사'
+
+        tables = driver.find_elements(By.XPATH, "/html/body/table[@border='1']")
+        
+#             dfTables = [pd.read_html(table.get_attribute('outerHTML'), header=[0, 1, 2])[0] for table in tables]
+#         else:    
+        dfTables = [pd.read_html(table.get_attribute('outerHTML'))[0] for table in tables]
+        if ((firmNm == "SK") and (year == 2021)) or ((firmNm == "롯데지주") and (year in [2019, 2020, 2021]))\
+        or ((firmNm == "미래에셋캐피탈") and (year in [2019, 2020, 2021])) \
+        or ((firmNm == "NAVER") and (year in [2020, 2021])) \
+        or ((firmNm == "효성") and (year in [2019, 2020, 2021])) \
+        or ((firmNm == "하림지주") and (year in [2019, 2020, 2021])) \
+        or ((firmNm == "OCI") and (year in [2020, 2021])) \
+        or ((firmNm == "티케이케미칼") and (year in [2019, 2020])) \
+        or ((firmNm == "이랜드월드") and (year in [2019])) \
+        or ((firmNm == "장금상선") and (year in [2020])):
+            dfTables = [makeHeader(table, firmNm, year) for table in dfTables]
+        dfTables = [dfTable for dfTable in dfTables if len(dfTable) > 5]
+        dfWide = pd.concat(dfTables, axis=1)
+        driver.quit()
+        
+        dfLong = cleanseTransWide(dfWide)
+        
+        dfLong = dfLong[~dfLong['매출회사'].isin(['소계', '합계', '계', '거래업체수', '해외계열사업체수', '계열회사합계매입액', \
+                                             '비금융소계', '금융회사', '기타', '해외계열사수', '해외계열사계매출액한화', \
+                                             '기타(루셈등)', '계열회사합계(매입액)', '⑩소계'])]
+        dfLong = dfLong[~dfLong['매입회사'].isin(['소계', '합계', '계', '거래업체수', '해외계열사업체수', '해외계열회사업체수', \
+                                             '비금융소계', '금융회사', '기타', '해외계열사수', '해외계열사계매출액한화', \
+                                              '기타(루셈등)', '계열회사합계(매입액)', '⑩소계'])]
+        
+        return dfLong
+    
+    def getTransTableAll(self, year):
+        
+        dGrpCmpny = getGrpCmpnyDict(year)
+        
+        cont = True
+        for grp, cmpny in dGrpCmpny.items():
+            print("="* 15 + grp + "=" * 15)
+            
+            if grp == '삼성':
+                cont = False
+            
+            if cont:
+                continue
+                
+            dfTransLong = api.getTransTable(cmpny, year)
+            # save the data in the after_cleansing folder
+            if not os.path.exists(f'../data/transactions/{year}'):
+                os.makedirs(f'../data/transactions/{year}')
+            dfTransLong.to_excel(f'../data/transactions/{year}/{grp}.xlsx', index=False)
+            
+            print(dfTransLong['매출회사'].unique())
+            print(dfTransLong['매입회사'].unique())
+            print(dfTransLong.head())
+            print(dfTransLong.tail())
+            print("="* 15 + grp + "=" * 15)
 
 if __name__ == '__main__':
     apiKey = "7946dcde119af7656afc01157071c0ab9488b9ad"
