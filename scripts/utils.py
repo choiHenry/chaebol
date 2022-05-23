@@ -265,7 +265,7 @@ def convertCmpnyNm(df, grp):
         df = df.replace('PFV', '피에프브이', regex=True)
         
     elif grp == 'DB':
-        df = df.replace('Inc\.', '아이엔씨', regex=True)
+        df = df.replace('Inc\.*$', '아이엔씨', regex=True)
         df = df.replace('DB', '디비', regex=True)
         
     elif grp == 'KG':

@@ -15,6 +15,7 @@ from os import path
 from selenium import webdriver
 from selenium.webdriver.common.action_chains import ActionChains
 from selenium.webdriver.common.by import By
+from selenium.webdriver.chrome.options import Options
 
 chromedriver_autoinstaller.install(path="../utils/")
 
@@ -264,13 +265,23 @@ class Api:
         
         return dfWide
 
-    def getTransTable(self, firmNm, year):
+    def getTransTable(self, firmNm, year, headless=False):
 
         if not os.path.exists(f'./data/transactions{year}'):
             os.makedirs(f'./data/transactions{year}')
         
         rceptNo = self.findRceptNum(firmNm, year)
-        driver = webdriver.Chrome()
+
+        
+        options = Options()
+        
+        if headless:
+            
+            options.headless = True
+            options.add_argument('window-size=1920x1080')
+            options.add_argument("disable-gpu")
+
+        driver = webdriver.Chrome(options=options)
         driver.maximize_window()
         driver.implicitly_wait(3)
         url = "http://dart.fss.or.kr/dsaf001/main.do?rcpNo=" + rceptNo
@@ -307,6 +318,14 @@ class Api:
         driver.quit()
         
         dfLong = cleanseTransWide(dfWide)
+
+        # KCC(year2 = 2020, 2021) has two '해외계열사계(매출액)' columns
+        if firmNm == '케이씨씨' and year in [2020, 2021]:
+
+            d = {'해외계열사계(매출액)': ['해외계열사계(매출액)_1', '해외계열사계(매출액)_2']}
+            dfLong = dfLong.rename(columns=lambda c: d[c].pop(0) if c in d.keys() else c)
+            dfLong['해외계열사계(매출액)'] = dfLong[['해외계열사계(매출액)_1', '해외계열사계(매출액)_2']].sum(axis=1)
+            dfLong.drop(columns=['해외계열사계(매출액)_1', '해외계열사계(매출액)_2'], inplace=True)
         
         dfLong = dfLong[~dfLong['매출회사'].isin(['소계', '합계', '계', '거래업체수', '해외계열사업체수', '계열회사합계매입액', \
                                              '비금융소계', '금융회사', '기타', '해외계열사수', '해외계열사계매출액한화', \
@@ -321,7 +340,7 @@ class Api:
         
         return dfLong
     
-    def getTransTableAll(self, year):
+    def getTransTableAll(self, year, headless=False):
         
         dGrpCmpny = getGrpCmpnyDict(year)
         
@@ -335,7 +354,7 @@ class Api:
             if cont:
                 continue
                 
-            dfTransLong = self.getTransTable(cmpny, year)
+            dfTransLong = self.getTransTable(cmpny, year, headless=headless)
             # save the data in the after_cleansing folder
             if not os.path.exists(f'../data/transactions/{year}'):
                 os.makedirs(f'../data/transactions/{year}')
@@ -382,18 +401,18 @@ class Api:
         for i, jurirno in enumerate(dfTrgt['jurirno']):
 
             inputElem.send_keys(jurirno)
-            driver.find_element_by_id('searchView').click()
+            driver.find_element(By.ID, 'searchView').click()
             driver.implicitly_wait(3)
             try:
-                target_row = driver.find_element_by_xpath('//*[@id="eprTable"]/tbody/tr/td[2]')
-                kiscode = target_row.get_attribute('data-kiscode')
+                targetRow = driver.find_element(By.XPATH, '//*[@id="eprTable"]/tbody/tr/td[2]')
+                kiscode = targetRow.get_attribute('data-kiscode')
                 dKiscode[i] = [jurirno, kiscode]
                 print(f"Found kiscode for {jurirno}: {kiscode}")
             except:
                 dKiscode[i] = [jurirno, np.nan]
                 print(f"No company found for {jurirno}. Continuing...")
             sleep(3)
-            inputElem = driver.find_element_by_id('q')
+            inputElem = driver.find_element(By.ID, 'q')
             inputElem.clear()
 
         sleep(3)
@@ -421,6 +440,72 @@ class Api:
         dfMrgd.to_excel(f'../data/cmpnySumry/cmpnySumry{year}Eng.xlsx', index=False)
 
         return dfMrgd
+
+    def scrapeChaebolCode(self, year, username, password):
+        dfAppnGroupSttus = pd.read_excel(f'../data/grpSumry/appnGroupSttus/appnGroupSttus{year}.xlsx')
+        dfAppnGroupSttus = dfAppnGroupSttus[dfAppnGroupSttus['smerNm'].str.len() <= 3]
+        dfAppnGroupSttus = dfAppnGroupSttus.reset_index().drop(columns=['index'])
+
+        dfGrpNmIdPrev = pd.read_excel(f'../data/grpSumry/groupNmId/groupNmId{year-1}.xlsx')
+
+        dfGrpNmId = pd.DataFrame()
+        dfGrpNmId['grpname2'] = dfAppnGroupSttus['unityGrupNm']
+        dfGrpNmId = dfGrpNmId.merge(dfGrpNmIdPrev[['grpname2', 'grpname', 'grpcode']], on='grpname2', how='left')
+        dfGrpNmId = dfGrpNmId.set_index('grpname2')
+
+        dfCharToInt = pd.read_excel('../data/utils/char-to-int.xlsx')
+
+        driver = webdriver.Chrome()
+        driver.implicitly_wait(3)
+
+        grsrch_url = 'https://www.kisline.com/cm/CM0100M00GE00.nice'
+        username = 'wonbok'
+        password = 'gkrtkrhk5034!'
+        driver.get(grsrch_url)
+        driver.find_element(By.CLASS_NAME, 'btn_close_layer').click()
+        driver.find_element(By.ID, 'lgnuid').send_keys(username)
+        driver.find_element(By.ID, 'tmp_lgnupassword').click()
+        driver.find_element(By.ID, 'lgnupassword').send_keys(password)
+        driver.find_element(By.CLASS_NAME, 'btn_log_in').click()
+        driver.implicitly_wait(3)
+        sleep(1)
+        driver.get('https://www.kisline.com/gr/GR0100M00GE00.nice')
+        inputElem = driver.find_element(By.ID, 'srchk')
+
+        for grpname2 in dfGrpNmId[dfGrpNmId['grpcode'].isna()].index:
+            inputElem.send_keys(grpname2)
+            driver.find_element(By.ID, 'slct').click()
+            driver.implicitly_wait(3)
+            try:
+                target = driver.find_element(By.XPATH, '//*[@id="cont"]/div[4]/table/tbody/tr/td[1]/a')
+                grpCode = target.get_attribute('data-gicd')
+
+                for i in range(len(dfCharToInt)):
+                    grpCode = re.sub(fr'{dfCharToInt.iloc[i, 0]}', str(dfCharToInt.iloc[i, 1]), grpCode)
+
+                dfGrpNmId.loc[grpname2, 'grpcode'] = int(grpCode)
+                print(f"Found group code for {grpname2}: {grpCode}")
+
+            except:
+                print(f"No group found for {grpname2}. Move to next...")
+
+            sleep(3)
+            inputElem = driver.find_element(By.ID, 'srchk')
+            inputElem.clear()
+
+        driver.find_element(By.LINK_TEXT, '로그아웃').click()
+        sleep(3)
+        driver.quit()
+
+        print("Could not find grpcodes for groups below:")
+        print(dfGrpNmId[dfGrpNmId['grpcode'].isna()].index)
+
+        for grpname2 in dfGrpNmId[dfGrpNmId['grpname'].isna()].index:
+            dfGrpNmId.loc[grpname2, 'grpname'] = input(f"Please Enter English Group Name for {grpname2}:")
+
+        dfGrpNmId.to_excel(f'../data/grpSumry/groupNmId/groupNmId{year}.xlsx')
+
+        return dfGrpNmId
 
     def mergeTransId(self, year):
 
@@ -460,10 +545,16 @@ class Api:
             
             dfTransId = dfTrans.merge(dfCmpnySumry[['매출회사', '매출회사id', '매출사상/비', '매출사금융/비금융', '매출액Val']], on='매출회사', how='left')
             dfTransId = dfTransId.merge(dfCmpnySumry[['매입회사', '매입회사id', '매입사상/비', '매입사금융/비금융']], on='매입회사', how='left')
+
             print(list(dfTransId[dfTransId['매출회사id'].isna()]['매출회사'].unique()))
             lookUpListSell.extend(list(dfTransId[dfTransId['매출회사id'].isna()]['매출회사'].unique()))
+
             print(list(dfTransId[dfTransId['매입회사id'].isna()]['매입회사'].unique()))
-            lookUpListBuy.extend(list(dfTransId[dfTransId['매입회사id'].isna()]['매출회사'].unique()))
+            lookUpListBuy.extend(list(dfTransId[dfTransId['매입회사id'].isna()]['매입회사'].unique()))
+
+            dfGrpNmId = pd.read_excel(f'../data/grpSumry/groupNmId/groupNmId{year}.xlsx')
+            dfTransId = dfTransId.merge(dfGrpNmId, on='grpname2', how='left')
+
             print(dfTransId.head())
             
             if not os.path.exists(f'../data/transactions-mrg/{year}'):
@@ -476,6 +567,7 @@ class Api:
             print("="*15, grp, "="*15)
         
         dfTransIdMrgd = pd.concat(lTransId, axis=0)
+
         dfTransIdMrgd.to_excel(f"../data/transactions-mrg/{year}/transactions{year}.xlsx", index=False)
 
         return dfTransIdMrgd, lookUpListSell, lookUpListBuy
