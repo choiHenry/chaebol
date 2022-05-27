@@ -14,11 +14,9 @@ def catOwn(row):
         return 0
     elif row['동일인과의관계2'] == '친족' and row['동일인과의관계3'] == '친족합계':
         return 0
-    elif row['동일인과의관계2'] == '계열회사(국내+해외)':
+    elif row['동일인과의관계2'] in ['계열회사(국내+해외)', '계열회사', '계열회사(국내)', '해외계열']:
         return 1
-    elif row['동일인과의관계2'] == '계열회사':
-        return 1
-    elif row['동일인과의관계'] == '기타주주':
+    elif row['동일인과의관계'] in ['기타주주', '기타']:
         return 99
 
 def catOwn2(row):
@@ -26,11 +24,9 @@ def catOwn2(row):
         return 0
     elif row['동일인과의관계2'] == '친족' and row['동일인과의관계3'] == '친족합계':
         return 0
-    elif row['동일인과의관계2'] == '계열회사(국내+해외)':
+    elif row['동일인과의관계2'] in ['계열회사(국내+해외)', '계열회사', '계열회사(국내)', '해외계열']:
         return 1
-    elif row['동일인과의관계2'] == '계열회사':
-        return 1
-    elif row['동일인과의관계'] == '기타주주':
+    elif row['동일인과의관계'] in ['기타주주', '기타']:
         return 99
 
 def cleanColNm(colNm):
