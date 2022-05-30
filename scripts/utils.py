@@ -86,7 +86,6 @@ def cleanCmpnyNm(df):
     df = df.replace('주\d+', '', regex=True)
     df = df.replace('\(\d+\)', '', regex=True)
 
-    
     return df
 
 def convColNm(colNm):
@@ -243,31 +242,69 @@ def cleanSalesData(df):
 
     return df
 
-def convertCmpnyNm(df, grp):
-
-    if grp == '엘에스':
-        df = df.replace('LS', '엘에스', regex=True)
-        df = df.replace('E1', '이원', regex=True)
-        df = df.replace('KJ', '케이제이', regex=True)
-        df = df.replace('JS', '제이에스', regex=True)
-        
-    elif grp == '미래에셋':
-        df = df.replace('미래에셋파트너스제9호사모투자', '미래에셋파트너스제구호사모투자', regex=True)
-        df = df.replace('미래에셋파트너스9호', '미래에셋파트너스제구호사모투자', regex=True)
+def convertCmpnyNm(row):
     
-    elif grp == '태영':
-        df = df.replace('SBS', '에스비에스', regex=True)
-        df = df.replace('KCP', '케이씨피', regex=True)
-        df = df.replace('PFV', '피에프브이', regex=True)
-        
-    elif grp == 'DB':
-        df = df.replace('Inc\.*$', '아이엔씨', regex=True)
-        df = df.replace('DB', '디비', regex=True)
-        
-    elif grp == 'KG':
-        df = df.replace('KG', '케이지', regex=True)
-
-    elif grp == '하림':
-        df = df.replace('FS', '에프에스', regex=True)
+    out = row['firmname']
     
-    return df
+    if row['grpname2'] == '엘에스':
+        out = re.sub("LS", "엘에스", out)
+        out = re.sub("E1", "이원", out)
+        out = re.sub("KJ", "케이제이", out)
+        out = re.sub("JS", "제이에스", out)
+        
+    elif row['grpname2'] == '미래에셋':
+        out = re.sub('미래에셋파트너스제9호사모투자', '미래에셋파트너스제구호사모투자', out)
+        out = re.sub('미래에셋파트너스9호', '미래에셋파트너스제구호사모투자', out)
+        
+    elif row['grpname2'] == '태영':
+        out = re.sub('SBS', '에스비에스', out)
+        out = re.sub('KCP', '케이씨피', out)
+        out = re.sub('PFV', '피에프브이', out)
+        
+    elif row['grpname2'] == 'DB':
+        out = re.sub('Inc\.*$', '아이엔씨', out)
+        out = re.sub('DB', '디비', out)
+        
+    elif row['grpname2'] == 'KG':
+        out = re.sub('KG', '케이지', out)
+        
+    elif row['grpname2'] == '하림':
+        out = re.sub('FS', '에프에스', out)
+    
+    return out
+
+def convertOwnerNm(row):
+    
+    out = row['ownername']
+    if not isinstance(out, str):
+        out = ''
+    
+    if row['grpname2'] == '엘에스':
+        out = re.sub("LS", "엘에스", out)
+        out = re.sub("E1", "이원", out)
+        out = re.sub("KJ", "케이제이", out)
+        out = re.sub("JS", "제이에스", out)
+        
+    elif row['grpname2'] == '미래에셋':
+        out = re.sub('미래에셋파트너스제9호사모투자', '미래에셋파트너스제구호사모투자', out)
+        out = re.sub('미래에셋파트너스9호', '미래에셋파트너스제구호사모투자', out)
+        
+    elif row['grpname2'] == '태영':
+        out = re.sub('SBS', '에스비에스', out)
+        out = re.sub('KCP', '케이씨피', out)
+        out = re.sub('PFV', '피에프브이', out)
+        
+    elif row['grpname2'] == 'DB':
+        out = re.sub('Inc\.*$', '아이엔씨', out)
+        out = re.sub('DB', '디비', out)
+        
+    elif row['grpname2'] == 'KG':
+        out = re.sub('KG', '케이지', out)
+        
+    elif row['grpname2'] == '하림':
+        out = re.sub('FS', '에프에스', out)
+    
+    elif row['grpname2'] == '지에스':
+        out = re.sub('GS', '지에스', out)
+    
+    return out
